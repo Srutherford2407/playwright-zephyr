@@ -26,12 +26,23 @@ export default class ZephyrReporter implements Reporter {
     this.zephyrService = new ZephyrService(this.options);
   }
 
-  onTestEnd(test: TestCase, result: TestResult) {
+onTestEnd(test: TestCase, result: TestResult) {
     if (test.title.match(this.testCaseKeyPattern) && test.title.match(this.testCaseKeyPattern)!.length > 1) {
       const [, testCaseId] = test.title.match(this.testCaseKeyPattern)!;
       const testCaseKey = `${this.projectKey}-${testCaseId}`;
       const status = convertStatus(result.status);
-      const comment = result.error
+
+      // 1. Initialize comment with custom annotation content (if present)
+      const customCommentAnnotation = test.annotations.find(a => a.type === 'zephyr-comment');
+      let customComment = customCommentAnnotation
+        ? `<b>📝 Custom Comment:</b> <br> <span style="color: rgb(0, 102, 204);">${customCommentAnnotation.description?.replaceAll(
+            '\n',
+            '<br>',
+          )}</span> <br> <br>`
+        : '';
+
+      // 2. Append Playwright error details if the test failed
+      const errorComment = result.error
         ? `<b>❌ Error Message: </b> <br> <span style="color: rgb(226, 80, 65);">${result.error?.message?.replaceAll(
             '\n',
             '<br>',
@@ -39,13 +50,18 @@ export default class ZephyrReporter implements Reporter {
             '\n',
             '<br>',
           )}</span>`
-        : undefined;
+        : '';
+
+      // 3. Combine custom comment and error comment
+      const finalComment = customComment + errorComment;
+      
+      const comment = finalComment.length > 0 ? finalComment : undefined;
 
       this.testResults.push({
         result: status,
         testCase: {
           key: testCaseKey,
-          comment,
+          comment: comment, // Use the final combined comment
         },
       });
     }
